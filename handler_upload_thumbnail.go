@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"mime"
 	"net/http"
 	"os"
 
@@ -39,17 +40,17 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediaType := header.Header.Get("Content-Type")
-	if mediaType == "" {
-		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for thumbnail", nil)
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Content-Type", err)
+		return
+	}
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Invalid file type", nil)
 		return
 	}
 
-	assetPath, err := getAssetPath(videoID, mediaType)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Something went wrong with media type", err)
-		return
-	}
+	assetPath := getAssetPath(videoID, mediaType)
 	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
 	dst, err := os.Create(assetDiskPath)
