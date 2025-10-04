@@ -45,7 +45,11 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	assetPath := getAssetPath(videoID, mediaType)
+	assetPath, err := getAssetPath(videoID, mediaType)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Something went wrong with media type", err)
+		return
+	}
 	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
 	dst, err := os.Create(assetDiskPath)
