@@ -30,10 +30,9 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
-
-	const maxMemory = 10 << 20
+	const maxMemory = 10 << 20 // 10 MB
 	r.ParseMultipartForm(maxMemory)
+
 	file, header, err := r.FormFile("thumbnail")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
@@ -41,39 +40,43 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediatype := header.Header.Get("Content-Type")
+	mediaType := header.Header.Get("Content-Type")
 
-	filebyte, err := io.ReadAll(file)
+	if mediaType == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing Content-Type for thumbnail", nil)
+		return
+	}
+
+	data, err := io.ReadAll(file)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to io read file", err)
+		respondWithError(w, http.StatusInternalServerError, "Error reading file", err)
 		return
 	}
 
-	dbVideo, err := cfg.db.GetVideo(videoID)
+	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable fetch video from db", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
+		return
+	}
+	if video.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
 		return
 	}
 
-	if dbVideo.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "you dont have permission to use this video", err)
-		return
+	videoThumbnails[videoID] = thumbnail{
+		data:      data,
+		mediaType: mediaType,
 	}
 
-	thumb := thumbnail{
-		data:      filebyte,
-		mediaType: mediatype,
-	}
+	url := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	video.ThumbnailURL = &url
 
-	videoThumbnails[videoID] = thumb
-
-	thumbnailURL := "http://localhost:8091/api/thumbnails/" + videoIDString
-	dbVideo.ThumbnailURL = &thumbnailURL
-	err = cfg.db.UpdateVideo(dbVideo)
+	err = cfg.db.UpdateVideo(video)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "something went wrong updating the video", err)
+		delete(videoThumbnails, videoID)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, dbVideo)
+	respondWithJSON(w, http.StatusOK, video)
 }
