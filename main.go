@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -82,18 +81,15 @@ func main() {
 		log.Fatal("PORT environment variable is not set")
 	}
 
-	awsCfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(s3Region),
-	)
+	awsCfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(s3Region))
 	if err != nil {
-		panic(fmt.Sprintf("failed loading config, %v", err))
+		log.Fatal(err)
 	}
-
-	s3Client := s3.NewFromConfig(awsCfg)
+	client := s3.NewFromConfig(awsCfg)
 
 	cfg := apiConfig{
 		db:               db,
-		s3Client:         s3Client,
+		s3Client:         client,
 		jwtSecret:        jwtSecret,
 		platform:         platform,
 		filepathRoot:     filepathRoot,
